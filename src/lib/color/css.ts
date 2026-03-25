@@ -4,7 +4,7 @@
  * Output is Style Dictionary / Token Transformer compatible.
  */
 
-import type { GeneratedPalette, ColorScale, ScaleStop } from './types';
+import type { GeneratedPalette, ColorScale, ScaleStop, ShadowValue, DtcgShadowLayer } from './types';
 import { SCALE_STOPS } from './types';
 
 function scaleVars(name: string, scale: ColorScale): string[] {
@@ -13,16 +13,30 @@ function scaleVars(name: string, scale: ColorScale): string[] {
   );
 }
 
-export function generateCssTokenString(palette: Omit<GeneratedPalette, 'cssTokenString'>): string {
-  const { brand, primary, neutral, success, info, warning, error, semanticTokens: st } = palette;
+/**
+ * Convert a ShadowValue (structured DTCG shadow) to a CSS box-shadow string.
+ * Exported so other modules (dtcg.ts, tests) can reuse the conversion.
+ */
+export function shadowToCss(v: ShadowValue): string {
+  if (v === 'none') return 'none';
+  const layers: DtcgShadowLayer[] = Array.isArray(v) ? v : [v];
+  return layers
+    .map(l => `${l.offsetX} ${l.offsetY} ${l.blur} ${l.spread} ${l.color}${l.inset ? ' inset' : ''}`)
+    .join(', ');
+}
+
+export function generateCssTokenString(palette: Omit<GeneratedPalette, 'cssTokenString' | 'dtcgTokenString'>): string {
+  const { brand, primary, neutral, success, info, warning, error, semanticTokens: st, shapeTokens: sh, effectsTokens: ef } = palette;
 
   const lines: string[] = [];
 
   lines.push(':root {');
 
   // ── Raw scales ──────────────────────────────────────────────────────────────
-  lines.push('  /* Brand Scale */');
-  lines.push(...scaleVars('brand', brand));
+  if (brand) {
+    lines.push('  /* Brand Scale */');
+    lines.push(...scaleVars('brand', brand));
+  }
 
   lines.push('  /* Primary Scale */');
   lines.push(...scaleVars('primary', primary));
@@ -50,11 +64,13 @@ export function generateCssTokenString(palette: Omit<GeneratedPalette, 'cssToken
   lines.push(`  --color-primary-action-disabled: ${st.primaryAction.disabled.light.hex};`);
   lines.push(`  --color-primary-action-disabled-text: ${st.primaryAction.disabledText.light.hex};`);
 
-  lines.push('  /* Brand Action States (Light) */');
-  lines.push(`  --color-brand-action-default: ${st.brandAction.default.light.hex};`);
-  lines.push(`  --color-brand-action-hover: ${st.brandAction.hover.light.hex};`);
-  lines.push(`  --color-brand-action-pressed: ${st.brandAction.pressed.light.hex};`);
-  lines.push(`  --color-brand-action-disabled: ${st.brandAction.disabled.light.hex};`);
+  if (st.brandAction) {
+    lines.push('  /* Brand Action States (Light) */');
+    lines.push(`  --color-brand-action-default: ${st.brandAction.default.light.hex};`);
+    lines.push(`  --color-brand-action-hover: ${st.brandAction.hover.light.hex};`);
+    lines.push(`  --color-brand-action-pressed: ${st.brandAction.pressed.light.hex};`);
+    lines.push(`  --color-brand-action-disabled: ${st.brandAction.disabled.light.hex};`);
+  }
 
   // ── Semantic: backgrounds ────────────────────────────────────────────────────
   lines.push('  /* Backgrounds */');
@@ -80,7 +96,23 @@ export function generateCssTokenString(palette: Omit<GeneratedPalette, 'cssToken
     lines.push(`  --color-${name}-icon: ${st[name].icon.light.hex};`);
     lines.push(`  --color-${name}-action: ${st[name].action.light.hex};`);
   }
+  // ── Shape tokens ──────────────────────────────────────────────────────────────────
+  lines.push('  /* Shape */');
+  lines.push(`  --radius-button: ${sh.radiusButton};`);
+  lines.push(`  --radius-xs: ${sh.radiusXs};`);
+  lines.push(`  --radius-sm: ${sh.radiusSm};`);
+  lines.push(`  --radius-md: ${sh.radiusMd};`);
+  lines.push(`  --radius-lg: ${sh.radiusLg};`);
+  lines.push(`  --radius-card: ${sh.radiusCard};`);
 
+  // ── Elevation / Effects tokens ────────────────────────────────────────────────
+  lines.push('  /* Elevation */');
+  lines.push(`  --shadow-sm: ${shadowToCss(ef.shadowSm)};`);
+  lines.push(`  --shadow-md: ${shadowToCss(ef.shadowMd)};`);
+  lines.push(`  --shadow-lg: ${shadowToCss(ef.shadowLg)};`);
+  lines.push(`  --shadow-button: ${shadowToCss(ef.shadowButton)};`);
+  lines.push(`  --glow-button: ${shadowToCss(ef.glowButton)};`);
+  lines.push(`  --glow-focus: ${shadowToCss(ef.glowFocus)};`);
   lines.push('}');
   lines.push('');
 
@@ -117,9 +149,9 @@ export function generateCssTokenString(palette: Omit<GeneratedPalette, 'cssToken
  * Inject all semantic token light values as CSS custom properties on :root.
  * Called live on every palette regeneration so the UI re-themes itself.
  */
-export function injectCssTokens(palette: Omit<GeneratedPalette, 'cssTokenString'>): void {
+export function injectCssTokens(palette: Omit<GeneratedPalette, 'cssTokenString' | 'dtcgTokenString'>): void {
   const root = document.documentElement;
-  const { semanticTokens: st, primary, neutral } = palette;
+  const { semanticTokens: st, primary, neutral, shapeTokens: sh, effectsTokens: ef } = palette;
 
   // Interactive primary colors
   root.style.setProperty('--color-primary-action-default', st.primaryAction.default.light.hex);
@@ -148,4 +180,20 @@ export function injectCssTokens(palette: Omit<GeneratedPalette, 'cssTokenString'
   root.style.setProperty('--color-neutral-300', neutral[300].hex);
   root.style.setProperty('--color-neutral-100', neutral[100].hex);
   root.style.setProperty('--color-neutral-50', neutral[50].hex);
+
+  // Shape
+  root.style.setProperty('--radius-button', sh.radiusButton);
+  root.style.setProperty('--radius-xs', sh.radiusXs);
+  root.style.setProperty('--radius-sm', sh.radiusSm);
+  root.style.setProperty('--radius-md', sh.radiusMd);
+  root.style.setProperty('--radius-lg', sh.radiusLg);
+  root.style.setProperty('--radius-card', sh.radiusCard);
+
+  // Elevation
+  root.style.setProperty('--shadow-sm', shadowToCss(ef.shadowSm));
+  root.style.setProperty('--shadow-md', shadowToCss(ef.shadowMd));
+  root.style.setProperty('--shadow-lg', shadowToCss(ef.shadowLg));
+  root.style.setProperty('--shadow-button', shadowToCss(ef.shadowButton));
+  root.style.setProperty('--glow-button', shadowToCss(ef.glowButton));
+  root.style.setProperty('--glow-focus', shadowToCss(ef.glowFocus));
 }

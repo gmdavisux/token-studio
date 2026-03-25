@@ -31,6 +31,12 @@ declare module 'culori' {
   /** Convert any culori color object to sRGB hex (#rrggbb). Returns undefined if out-of-gamut before clamping. */
   export function formatHex(color: AnyColor): string | undefined;
 
+  /** Convert any culori color object to an sRGB rgb()/rgba() string. */
+  export function formatRgb(color: AnyColor): string | undefined;
+
+  /** Convert any culori color object to an hsl()/hsla() string. */
+  export function formatHsl(color: AnyColor): string | undefined;
+
   /**
    * Clamp a color to fit within the target gamut.
    * @param color - Source color

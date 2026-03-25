@@ -3,8 +3,18 @@
  * Uses `culori` for all color space conversions.
  */
 
-import { parse as culoriParse, oklch as toOklch, formatHex } from 'culori';
+import {
+  parse as culoriParse,
+  oklch as toOklch,
+  formatHex,
+  formatRgb,
+  formatHsl,
+} from 'culori';
 import type { OKLCHColor, ColorFormat, ParseResult } from './types';
+
+function asCuloriOklch(color: OKLCHColor) {
+  return { mode: 'oklch' as const, l: color.l, c: color.c, h: color.h };
+}
 
 /**
  * Detect the likely format of a color string before parsing.
@@ -62,7 +72,7 @@ export function parseColor(input: string): ParseResult {
  * Convert an OKLCHColor back to a HEX string for display.
  */
 export function oklchToHex(color: OKLCHColor): string {
-  const hex = formatHex({ mode: 'oklch', l: color.l, c: color.c, h: color.h });
+  const hex = formatHex(asCuloriOklch(color));
   return hex ?? '#000000';
 }
 
@@ -71,4 +81,22 @@ export function oklchToHex(color: OKLCHColor): string {
  */
 export function formatOklch(color: OKLCHColor): string {
   return `oklch(${color.l.toFixed(3)} ${color.c.toFixed(3)} ${color.h.toFixed(1)})`;
+}
+
+/**
+ * Format an OKLCHColor into a supported display format string.
+ */
+export function formatColor(color: OKLCHColor, format: Exclude<ColorFormat, 'unknown'>): string {
+  const culoriColor = asCuloriOklch(color);
+
+  switch (format) {
+    case 'hex':
+      return formatHex(culoriColor) ?? '#000000';
+    case 'rgb':
+      return formatRgb(culoriColor) ?? 'rgb(0, 0, 0)';
+    case 'hsl':
+      return formatHsl(culoriColor) ?? 'hsl(0, 0%, 0%)';
+    case 'oklch':
+      return formatOklch(color);
+  }
 }

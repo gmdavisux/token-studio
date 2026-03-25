@@ -1,37 +1,99 @@
 import { useCallback, useState } from 'react';
-import { useTokenStudio } from '../context/TokenStudioContext';
-import type { ColorFormat } from '../lib/color/types';
+import type { ColorFormat, OKLCHColor } from '../lib/color/types';
+import { formatColor, parseColor } from '../lib/color/parse';
 
-const FORMAT_OPTIONS: { value: ColorFormat; label: string; placeholder: string }[] = [
-  { value: 'hex', label: 'HEX', placeholder: '#ff0000' },
-  { value: 'rgb', label: 'RGB', placeholder: 'rgb(255, 0, 0)' },
-  { value: 'hsl', label: 'HSL', placeholder: 'hsl(0, 100%, 50%)' },
-  { value: 'oklch', label: 'OKLCH', placeholder: 'oklch(0.63 0.26 29)' },
+type SupportedColorFormat = Exclude<ColorFormat, 'unknown'>;
+
+const FORMAT_OPTIONS: { value: SupportedColorFormat; label: string; placeholder: string }[] = [
+  { value: 'hex',   label: 'HEX',   placeholder: '#4f46e5' },
+  { value: 'rgb',   label: 'RGB',   placeholder: 'rgb(79, 70, 229)' },
+  { value: 'hsl',   label: 'HSL',   placeholder: 'hsl(243, 75%, 59%)' },
+  { value: 'oklch', label: 'OKLCH', placeholder: 'oklch(0.55 0.22 272)' },
 ];
 
-export function ColorInput() {
-  const { state, handleColorInput } = useTokenStudio();
-  const [localFormat, setLocalFormat] = useState<ColorFormat>('hex');
+export interface ColorInputProps {
+  label: string;
+  value: string;
+  isValid: boolean;
+  inputFormat: ColorFormat;
+  colorOKLCH: OKLCHColor | null;
+  /** Resolved swatch hex — shown in the preview chip. Null = no swatch. */
+  swatchHex?: string | null;
+  onChange: (raw: string) => void;
+  hint?: string;
+  optional?: boolean;
+}
+
+export function ColorInput({
+  label,
+  value,
+  isValid,
+  inputFormat,
+  colorOKLCH,
+  swatchHex,
+  onChange,
+  hint,
+  optional,
+}: ColorInputProps) {
+  const [displayFormat, setDisplayFormat] = useState<SupportedColorFormat>(
+    inputFormat === 'unknown' ? 'oklch' : inputFormat
+  );
 
   const placeholder =
-    FORMAT_OPTIONS.find((f) => f.value === localFormat)?.placeholder ?? '#ff0000';
+    FORMAT_OPTIONS.find((f) => f.value === displayFormat)?.placeholder ?? '#4f46e5';
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      handleColorInput(e.target.value);
+      const nextRaw = e.target.value;
+      const result = parseColor(nextRaw);
+      if (result.ok && result.format !== 'unknown') {
+        setDisplayFormat(result.format);
+      }
+      onChange(nextRaw);
     },
-    [handleColorInput]
+    [onChange]
   );
 
-  const isError = state.rawInput.length > 0 && !state.isInputValid;
+  const handleFormatChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const nextFormat = e.target.value as SupportedColorFormat;
+      setDisplayFormat(nextFormat);
+      if (!isValid || !colorOKLCH) return;
+      onChange(formatColor(colorOKLCH, nextFormat));
+    },
+    [onChange, colorOKLCH, isValid]
+  );
+
+  const isError = value.length > 0 && !isValid;
 
   return (
     <div className="w-full">
+      {/* Label row */}
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span
+          className="text-xs font-semibold"
+          style={{ color: 'var(--color-neutral-700, #374151)' }}
+        >
+          {label}
+        </span>
+        {optional && (
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+            style={{
+              backgroundColor: 'var(--color-bg-sunken, #f3f4f6)',
+              color: 'var(--color-neutral-400, #9ca3af)',
+            }}
+          >
+            optional
+          </span>
+        )}
+      </div>
+
       <div className="flex items-stretch gap-2">
         {/* Format selector */}
         <select
-          value={localFormat}
-          onChange={(e) => setLocalFormat(e.target.value as ColorFormat)}
+          value={displayFormat}
+          onChange={handleFormatChange}
           className="px-2 py-2 text-sm rounded-md border bg-white text-neutral-700 focus:outline-none focus:ring-2"
           style={{
             borderColor: 'var(--color-border-default, #d1d5db)',
@@ -49,7 +111,7 @@ export function ColorInput() {
         {/* Color text input */}
         <input
           type="text"
-          value={state.rawInput}
+          value={value}
           onChange={handleChange}
           placeholder={placeholder}
           spellCheck={false}
@@ -64,22 +126,26 @@ export function ColorInput() {
             color: 'var(--color-neutral-900, #111827)',
           }}
           aria-invalid={isError}
-          aria-label="Brand color input"
+          aria-label={`${label} input`}
         />
 
-        {/* Brand color preview swatch */}
-        <div
-          className="w-10 h-10 rounded-md border border-black/10 flex-shrink-0 transition-colors duration-200"
-          style={{
-            backgroundColor:
-              state.palette && state.isInputValid
-                ? state.palette.brand[500].hex
-                : '#9ca3af',
-          }}
-          title="Brand color preview (500 stop)"
-          aria-label="Brand color preview"
-        />
+        {/* Color preview swatch */}
+        {swatchHex !== undefined && (
+          <div
+            className="w-10 h-10 rounded-md border border-black/10 flex-shrink-0 transition-colors duration-200"
+            style={{ backgroundColor: swatchHex ?? '#9ca3af' }}
+            title={swatchHex ?? 'No color'}
+            aria-label={`${label} preview`}
+          />
+        )}
       </div>
+
+      {/* Hint */}
+      {hint && !isError && (
+        <p className="mt-1 text-xs" style={{ color: 'var(--color-neutral-400, #9ca3af)' }}>
+          {hint}
+        </p>
+      )}
 
       {/* Inline error */}
       {isError && (

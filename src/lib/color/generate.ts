@@ -9,10 +9,20 @@ import type {
   OKLCHColor,
   ColorScale,
   ScaleStop,
+  ThemeConfig,
   SCALE_STOPS as _stops,
 } from './types';
-import { SCALE_STOPS } from './types';
+import { SCALE_STOPS, DEFAULT_THEME_CONFIG } from './types';
 import { contrastOnBlack, contrastOnWhite, preferredText } from './contrast';
+
+/** Chroma multipliers for each vibrancy level. */
+const VIBRANCY_MULTIPLIER: Record<ThemeConfig['vibrancy'], number> = {
+  monochrome: 0.05,
+  pastel: 0.3,
+  muted: 0.6,
+  natural: 1.0,
+  vivid: 1.5,
+};
 
 // ─── Internal helpers ──────────────────────────────────────────────────────
 
@@ -20,16 +30,30 @@ import { contrastOnBlack, contrastOnWhite, preferredText } from './contrast';
  * Build an OKLCHColor and clamp it into the sRGB gamut via culori.
  */
 function makeColor(l: number, c: number, h: number): OKLCHColor {
-  const clamped = clampChroma(
-    { mode: 'oklch', l: Math.max(0, Math.min(1, l)), c: Math.max(0, c), h },
-    'oklch',
-    'srgb'
-  ) as { mode: string; l?: number; c?: number; h?: number } | undefined;
-  return {
-    l: clamped?.l ?? l,
-    c: clamped?.c ?? 0,
-    h: clamped?.h ?? h,
-  };
+  let clampedL = l;
+  let clampedC = c;
+  let clampedH = h;
+
+  try {
+    const result = clampChroma(
+      { mode: 'oklch', l: Math.max(0, Math.min(1, l)), c: Math.max(0, c), h },
+      'oklch',
+      'srgb'
+    ) as { mode: string; l?: number; c?: number; h?: number } | null | undefined;
+
+    if (result != null) {
+      clampedL = result.l ?? l;
+      clampedC = result.c ?? c;
+      clampedH = result.h ?? h;
+    }
+  } catch {
+    // fallback to input values if culori fails
+    clampedL = l;
+    clampedC = c;
+    clampedH = h;
+  }
+
+  return { l: clampedL, c: clampedC, h: clampedH };
 }
 
 /**
@@ -79,6 +103,20 @@ const LIGHTNESS_MAP: Record<ScaleStop, number> = {
   950: 0.140,
 };
 
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * Keep the scale shape from LIGHTNESS_MAP but center it around the chosen
+ * brand lightness at stop 500.
+ */
+function lightnessForStop(stop: ScaleStop, baseLightness: number): number {
+  if (stop === 500) return clamp01(baseLightness);
+  const deltaFrom500 = LIGHTNESS_MAP[stop] - LIGHTNESS_MAP[500];
+  return clamp01(baseLightness + deltaFrom500);
+}
+
 /**
  * Chroma fraction relative to the base chroma for each stop.
  * Lighter stops have lower chroma, darker stops taper off too.
@@ -99,27 +137,28 @@ const CHROMA_FRACTION: Record<ScaleStop, number> = {
 
 /**
  * Generate a full 11-stop color scale anchored at a given OKLCH base color.
- * The 500 stop is anchored to the base color's actual lightness (but can be
- * overridden with anchorStop if the base maps to a different stop number).
+ * chromaMultiplier scales every stop's chroma (1.0 = natural, 0.6 = muted, 1.5 = vivid).
  */
-export function generateScale(baseColor: OKLCHColor): ColorScale {
+export function generateScale(baseColor: OKLCHColor, chromaMultiplier = 1.0): ColorScale {
   const baseC = baseColor.c;
+  const baseL = baseColor.l;
   const h = baseColor.h;
 
   const scale = {} as ColorScale;
   for (const stop of SCALE_STOPS) {
-    const l = LIGHTNESS_MAP[stop];
-    const c = baseC * CHROMA_FRACTION[stop];
+    const l = lightnessForStop(stop, baseL);
+    const c = baseC * CHROMA_FRACTION[stop] * chromaMultiplier;
     scale[stop] = resolve(makeColor(l, c, h));
   }
   return scale;
 }
 
 /**
- * Generate the neutral scale: very low chroma, hue tinted toward brand.
+ * Generate the neutral scale: very low chroma, hue tinted toward the primary
+ * (or brand hue when provided — brand tints the neutral palette).
  */
-export function generateNeutralScale(brandHue: number): ColorScale {
-  const h = brandHue;
+export function generateNeutralScale(primaryHue: number, brandHue?: number): ColorScale {
+  const h = brandHue ?? primaryHue;
   const MAX_CHROMA = 0.025;
 
   const scale = {} as ColorScale;
@@ -134,48 +173,32 @@ export function generateNeutralScale(brandHue: number): ColorScale {
 }
 
 /**
- * Returns the primary brand "personality":
+ * Returns the personality of the primary color:
  * - chromaLevel: low / medium / high
  * - lightnessLevel: light / mid / dark
  */
-function brandPersonality(brand: OKLCHColor) {
+function primaryPersonality(primary: OKLCHColor) {
   const chromaLevel =
-    brand.c < 0.08 ? 'low' : brand.c < 0.18 ? 'medium' : 'high';
+    primary.c < 0.08 ? 'low' : primary.c < 0.18 ? 'medium' : 'high';
   const lightnessLevel =
-    brand.l > 0.75 ? 'light' : brand.l < 0.45 ? 'dark' : 'mid';
+    primary.l > 0.75 ? 'light' : primary.l < 0.45 ? 'dark' : 'mid';
   return { chromaLevel, lightnessLevel };
 }
 
 /**
- * Generate the PRIMARY scale — always blue-indigo (H ~260°–285°).
- * Chroma is harmonized with the brand personality.
- */
-export function generatePrimaryScale(brand: OKLCHColor): ColorScale {
-  const { chromaLevel } = brandPersonality(brand);
-
-  // Primary hue locked to blue-indigo region
-  const primaryHue = 272;
-
-  // Harmonize chroma with brand personality
-  const baseChroma =
-    chromaLevel === 'low' ? 0.18 : chromaLevel === 'medium' ? 0.22 : 0.26;
-
-  return generateScale({ l: LIGHTNESS_MAP[500], c: baseChroma, h: primaryHue });
-}
-
-/**
  * Generate a semantic scale (success/info/warning/error) with a fixed hue
- * and chroma harmonized to brand personality.
+ * and chroma harmonized to primary color personality.
  */
 export function generateSemanticScale(
   hue: number,
-  brand: OKLCHColor
+  primary: OKLCHColor,
+  chromaMultiplier = 1.0
 ): ColorScale {
-  const { chromaLevel } = brandPersonality(brand);
+  const { chromaLevel } = primaryPersonality(primary);
   const baseChroma =
     chromaLevel === 'low' ? 0.14 : chromaLevel === 'medium' ? 0.18 : 0.22;
 
-  return generateScale({ l: LIGHTNESS_MAP[500], c: baseChroma, h: hue });
+  return generateScale({ l: LIGHTNESS_MAP[500], c: baseChroma, h: hue }, chromaMultiplier);
 }
 
 // Fixed hues for semantic scales
@@ -187,16 +210,22 @@ export const SEMANTIC_HUES = {
 } as const;
 
 /**
- * Top-level function: generate ALL raw scales for a given brand color.
+ * Top-level function: generate ALL raw scales for a given primary color and ThemeConfig.
+ * Pass an optional brandColor to include a brand reference scale and tint the neutral.
  */
-export function generateAllScales(brandColor: OKLCHColor) {
+export function generateAllScales(
+  primaryColor: OKLCHColor,
+  config: ThemeConfig = DEFAULT_THEME_CONFIG,
+  brandColor?: OKLCHColor
+) {
+  const chromaMultiplier = VIBRANCY_MULTIPLIER[config.vibrancy];
   return {
-    brand: generateScale(brandColor),
-    primary: generatePrimaryScale(brandColor),
-    neutral: generateNeutralScale(brandColor.h),
-    success: generateSemanticScale(SEMANTIC_HUES.success, brandColor),
-    info: generateSemanticScale(SEMANTIC_HUES.info, brandColor),
-    warning: generateSemanticScale(SEMANTIC_HUES.warning, brandColor),
-    error: generateSemanticScale(SEMANTIC_HUES.error, brandColor),
+    ...(brandColor ? { brand: generateScale(brandColor, chromaMultiplier) } : {}),
+    primary: generateScale(primaryColor, chromaMultiplier),
+    neutral: generateNeutralScale(primaryColor.h, brandColor?.h),
+    success: generateSemanticScale(SEMANTIC_HUES.success, primaryColor, chromaMultiplier),
+    info: generateSemanticScale(SEMANTIC_HUES.info, primaryColor, chromaMultiplier),
+    warning: generateSemanticScale(SEMANTIC_HUES.warning, primaryColor, chromaMultiplier),
+    error: generateSemanticScale(SEMANTIC_HUES.error, primaryColor, chromaMultiplier),
   };
 }

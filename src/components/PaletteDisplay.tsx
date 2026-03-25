@@ -2,6 +2,7 @@ import type { GeneratedPalette } from '../lib/color/types';
 import { ScaleRow } from './ScaleRow';
 import { SemanticTokenGroup } from './SemanticTokenGroup';
 import { CSSExport } from './CSSExport';
+import { ComponentPreview } from './ComponentPreview';
 import type { SemanticToken } from '../lib/color/types';
 
 interface PaletteDisplayProps {
@@ -11,12 +12,16 @@ interface PaletteDisplayProps {
 // ─── Sections ──────────────────────────────────────────────────────────────────
 
 function RawScalesSection({ palette }: { palette: GeneratedPalette }) {
-  const scaleNames = ['brand', 'primary', 'neutral', 'success', 'info', 'warning', 'error'] as const;
+  const scaleNames = ['primary', 'neutral', 'success', 'info', 'warning', 'error'] as const;
   return (
-    <section>
+      <section id="color-scales" style={{ scrollMarginTop: '88px' }}>
       <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--color-neutral-900, #111827)' }}>
         Color Scales
       </h2>
+      {/* Brand scale — only rendered when an optional brand color was supplied */}
+      {palette.brand && (
+        <ScaleRow name="brand" scale={palette.brand} />
+      )}
       {scaleNames.map((name) => (
         <ScaleRow key={name} name={name} scale={palette[name]} />
       ))}
@@ -37,11 +42,13 @@ function ActionStatesSection({ palette, mode }: { palette: GeneratedPalette; mod
           tokens={Object.values(primaryAction) as SemanticToken[]}
           mode={mode}
         />
-        <SemanticTokenGroup
-          title="Brand"
-          tokens={Object.values(brandAction) as SemanticToken[]}
-          mode={mode}
-        />
+        {brandAction && (
+          <SemanticTokenGroup
+            title="Brand"
+            tokens={Object.values(brandAction) as SemanticToken[]}
+            mode={mode}
+          />
+        )}
       </div>
     </section>
   );
@@ -97,7 +104,8 @@ function ModePanel({ palette, mode }: { palette: GeneratedPalette; mode: 'light'
   return (
     <div
       className="rounded-2xl border p-6 flex flex-col gap-10"
-      style={{
+        id={mode === 'light' ? 'light-mode' : 'dark-mode'}
+        style={{ scrollMarginTop: '88px',
         backgroundColor: bg,
         borderColor: mode === 'light' ? '#e5e7eb' : '#374151',
       }}
@@ -115,16 +123,34 @@ function ModePanel({ palette, mode }: { palette: GeneratedPalette; mode: 'light'
   );
 }
 
+// ─── Components Section ──────────────────────────────────────────────────────
+
+function ComponentsSection({ palette }: { palette: GeneratedPalette }) {
+  return (
+    <section id="components" style={{ scrollMarginTop: '88px' }}>
+      <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--color-neutral-900, #111827)' }}>
+        Components
+      </h2>
+      <div className="grid grid-cols-1 gap-8">
+        <ComponentPreview palette={palette} />
+      </div>
+    </section>
+  );
+}
+
 // ─── Main export ───────────────────────────────────────────────────────────────
 
 export function PaletteDisplay({ palette }: PaletteDisplayProps) {
   return (
     <div className="flex flex-col gap-10">
+      {/* Component previews — both light and dark */}
+      <ComponentsSection palette={palette} />
+
       {/* Raw scales (mode-independent) */}
       <RawScalesSection palette={palette} />
 
       {/* Semantic sections — both light and dark visible simultaneously */}
-      <div>
+        <div id="semantic-tokens" style={{ scrollMarginTop: '88px' }}>
         <h2
           className="text-xl font-bold mb-6"
           style={{ color: 'var(--color-neutral-900, #111827)' }}
@@ -138,7 +164,9 @@ export function PaletteDisplay({ palette }: PaletteDisplayProps) {
       </div>
 
       {/* CSS Export */}
-      <CSSExport cssTokenString={palette.cssTokenString} />
+        <div id="export" style={{ scrollMarginTop: '88px' }}>
+          <CSSExport cssTokenString={palette.cssTokenString} dtcgTokenString={palette.dtcgTokenString} />
+        </div>
     </div>
   );
 }

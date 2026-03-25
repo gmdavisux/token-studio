@@ -14,7 +14,9 @@ import type {
   BackgroundToken,
   BorderToken,
   ResolvedColor,
+  ThemeConfig,
 } from './types';
+import { DEFAULT_THEME_CONFIG } from './types';
 import { contrastOnBlack, contrastOnWhite, preferredText } from './contrast';
 import type { OKLCHColor } from './types';
 import { oklchToHex } from './parse';
@@ -47,8 +49,19 @@ const WHITE_COLOR: ResolvedColor = resolveStatic(1, 0, 0);
 function buildActionTokens(
   scaleName: string,
   scale: ColorScale,
-  neutral: ColorScale
+  neutral: ColorScale,
+  isAchromatic = false
 ): Record<ActionState, SemanticToken> {
+  if (isAchromatic) {
+    // Black on light mode, white on dark mode
+    return {
+      default: makeToken(`${scaleName}-action-default`, 'Default', neutral[900], neutral[100]),
+      hover: makeToken(`${scaleName}-action-hover`, 'Hover', neutral[800], neutral[200]),
+      pressed: makeToken(`${scaleName}-action-pressed`, 'Pressed', neutral[700], neutral[300]),
+      disabled: makeToken(`${scaleName}-action-disabled`, 'Disabled', neutral[300], neutral[700]),
+      disabledText: makeToken(`${scaleName}-action-disabled-text`, 'Disabled Text', neutral[500], neutral[500]),
+    };
+  }
   return {
     default: makeToken(
       `${scaleName}-action-default`,
@@ -137,17 +150,17 @@ function buildBorderTokens(
 // ─── Top-level derivation ─────────────────────────────────────────────────────
 
 export function deriveSemanticTokens(scales: {
-  brand: ColorScale;
+  brand?: ColorScale;
   primary: ColorScale;
   neutral: ColorScale;
   success: ColorScale;
   info: ColorScale;
   warning: ColorScale;
   error: ColorScale;
-}): SemanticTokenMap {
+}, _config: ThemeConfig = DEFAULT_THEME_CONFIG): SemanticTokenMap {
   return {
     primaryAction: buildActionTokens('primary', scales.primary, scales.neutral),
-    brandAction: buildActionTokens('brand', scales.brand, scales.neutral),
+    ...(scales.brand ? { brandAction: buildActionTokens('brand', scales.brand, scales.neutral) } : {}),
     success: buildAlertTokens('success', scales.success),
     info: buildAlertTokens('info', scales.info),
     warning: buildAlertTokens('warning', scales.warning),
