@@ -222,6 +222,7 @@ function MockButtons({ palette, mode, size, selectedVariant, onSelectVariant }: 
 
 function MockInput({ palette, mode, size }: MockProps) {
   const s = palette.semanticTokens;
+  const [isFocused, setIsFocused] = useState(false);
   const bgHex = getSemanticHex(s.backgrounds.surface, mode);
   const borderHex = getSemanticHex(s.borders.default, mode);
   const focusBorderHex = getSemanticHex(s.borders.focus, mode);
@@ -229,6 +230,8 @@ function MockInput({ palette, mode, size }: MockProps) {
   const placeholderHex = palette.neutral[400].hex;
   const radiusXs = `var(--radius-xs, ${palette.shapeTokens.radiusXs})`;
   const st = sizeStyles(size);
+  // Scoped style for ::placeholder since inline styles can't target pseudo-elements
+  const placeholderStyle = `#mock-input-field::placeholder { color: ${placeholderHex}; }`;
 
   return (
     <div>
@@ -238,39 +241,27 @@ function MockInput({ palette, mode, size }: MockProps) {
       >
         Input
       </h4>
-      <div className="flex flex-col gap-2 max-w-xs">
-        {/* Normal state */}
-        <div
-          className="flex items-center px-3 py-2"
+      <div className="max-w-xs">
+        <style>{placeholderStyle}</style>
+        <input
+          id="mock-input-field"
+          type="text"
+          placeholder="Placeholder text…"
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           style={{
+            width: '100%',
             backgroundColor: bgHex,
-            border: `1.5px solid ${borderHex}`,
+            border: isFocused ? `2px solid ${focusBorderHex}` : `1.5px solid ${borderHex}`,
             color: textHex,
             borderRadius: radiusXs,
             fontSize: st.fontSize,
             padding: `${st.py} 12px`,
+            outline: 'none',
+            boxShadow: isFocused ? `0 0 0 3px ${focusBorderHex}33` : 'none',
+            transition: 'border-color 0.15s, box-shadow 0.15s',
           }}
-        >
-          <span style={{ color: placeholderHex }}>
-            Placeholder text…
-          </span>
-        </div>
-
-        {/* Focus state */}
-        <div
-          className="flex items-center px-3 py-2"
-          style={{
-            backgroundColor: bgHex,
-            border: `2px solid ${focusBorderHex}`,
-            color: textHex,
-            borderRadius: radiusXs,
-            fontSize: st.fontSize,
-            padding: `${st.py} 12px`,
-            boxShadow: `0 0 0 3px ${focusBorderHex}33`,
-          }}
-        >
-          <span>Focused input value</span>
-        </div>
+        />
       </div>
 
       <TokenLegend
@@ -284,6 +275,270 @@ function MockInput({ palette, mode, size }: MockProps) {
             hex: textHex,
             palette,
           },
+        ]}
+      />
+    </div>
+  );
+}
+
+// ─── Select ───────────────────────────────────────────────────────────────────
+
+function MockSelect({ palette, mode, size }: MockProps) {
+  const s = palette.semanticTokens;
+  const [value, setValue] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+  const bgHex = getSemanticHex(s.backgrounds.surface, mode);
+  const borderHex = getSemanticHex(s.borders.default, mode);
+  const focusBorderHex = getSemanticHex(s.borders.focus, mode);
+  const textHex = mode === 'light' ? palette.neutral[900].hex : palette.neutral[100].hex;
+  const placeholderHex = palette.neutral[400].hex;
+  const chevronHex = palette.neutral[400].hex;
+  const radiusXs = `var(--radius-xs, ${palette.shapeTokens.radiusXs})`;
+  const st = sizeStyles(size);
+
+  const options = ['Sans-serif', 'Serif', 'Monospace', 'Display'];
+
+  return (
+    <div>
+      <h4
+        className="text-xs font-semibold uppercase tracking-wider mb-3"
+        style={{ color: 'var(--color-neutral-400, #9ca3af)' }}
+      >
+        Select
+      </h4>
+      <div className="relative max-w-xs">
+        <select
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          style={{
+            width: '100%',
+            appearance: 'none',
+            backgroundColor: bgHex,
+            border: isFocused ? `2px solid ${focusBorderHex}` : `1.5px solid ${borderHex}`,
+            color: value ? textHex : placeholderHex,
+            borderRadius: radiusXs,
+            fontSize: st.fontSize,
+            padding: `${st.py} 36px ${st.py} 12px`,
+            outline: 'none',
+            boxShadow: isFocused ? `0 0 0 3px ${focusBorderHex}33` : 'none',
+            cursor: 'pointer',
+            transition: 'border-color 0.15s, box-shadow 0.15s',
+          }}
+        >
+          <option value="" disabled hidden>Choose an option…</option>
+          {options.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+        {/* Custom chevron — pointer-events: none so the select receives clicks */}
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M3 5l4 4 4-4" stroke={isFocused ? focusBorderHex : chevronHex} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </div>
+
+      <TokenLegend
+        entries={[
+          { label: 'BG', cssVar: '--color-bg-surface', hex: bgHex, palette },
+          { label: 'Border', cssVar: '--color-border-default', hex: borderHex, palette },
+          { label: 'Focus ring', cssVar: '--color-border-focus', hex: focusBorderHex, palette },
+          { label: 'Selected option', cssVar: '--color-primary-action-default', hex: getSemanticHex(s.primaryAction.default, mode), palette },
+        ]}
+      />
+    </div>
+  );
+}
+
+// ─── Checkboxes ───────────────────────────────────────────────────────────────
+
+function MockCheckboxes({ palette, mode, size }: MockProps) {
+  const s = palette.semanticTokens;
+  const checkedBgHex = getSemanticHex(s.primaryAction.default, mode);
+  const borderHex = getSemanticHex(s.borders.default, mode);
+  const disabledHex = getSemanticHex(s.primaryAction.disabled, mode);
+  const textHex = mode === 'light' ? palette.neutral[900].hex : palette.neutral[100].hex;
+  const disabledTextHex = getSemanticHex(s.primaryAction.disabledText, mode);
+  const st = sizeStyles(size);
+  const boxSize = size === 'sm' ? 14 : size === 'lg' ? 20 : 16;
+
+  type CheckItemDef = { label: string; initialChecked: boolean; disabled?: boolean; indeterminate?: boolean };
+  const itemDefs: CheckItemDef[] = [
+    { label: 'Unchecked option', initialChecked: false },
+    { label: 'Checked option', initialChecked: true },
+    { label: 'Indeterminate', initialChecked: false, indeterminate: true },
+    { label: 'Disabled (checked)', initialChecked: true, disabled: true },
+    { label: 'Disabled (unchecked)', initialChecked: false, disabled: true },
+  ];
+
+  const [checkedState, setCheckedState] = useState<boolean[]>(() => itemDefs.map((d) => d.initialChecked));
+
+  const toggle = (idx: number) => {
+    setCheckedState((prev) => prev.map((v, i) => (i === idx ? !v : v)));
+  };
+
+  return (
+    <div>
+      <h4
+        className="text-xs font-semibold uppercase tracking-wider mb-3"
+        style={{ color: 'var(--color-neutral-400, #9ca3af)' }}
+      >
+        Checkboxes
+      </h4>
+      <div className="flex flex-col gap-2.5">
+        {itemDefs.map(({ label, disabled, indeterminate }, idx) => {
+          const isChecked = checkedState[idx];
+          const visuallyOn = indeterminate || isChecked;
+          const bg = visuallyOn && !disabled ? checkedBgHex : (disabled ? disabledHex : 'transparent');
+          const border = visuallyOn && !disabled ? checkedBgHex : (disabled ? disabledHex : borderHex);
+          const labelColor = disabled ? disabledTextHex : textHex;
+
+          return (
+            <label
+              key={label}
+              className="flex items-center gap-2.5 select-none"
+              style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+            >
+              {/* Real checkbox — visually hidden, drives the state */}
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={isChecked}
+                disabled={disabled}
+                onChange={() => toggle(idx)}
+              />
+              {/* Token-styled visual box */}
+              <div
+                aria-hidden="true"
+                className="flex-shrink-0 flex items-center justify-center"
+                style={{
+                  width: boxSize,
+                  height: boxSize,
+                  backgroundColor: bg,
+                  border: `2px solid ${border}`,
+                  borderRadius: 3,
+                  pointerEvents: 'none',
+                  transition: 'background-color 0.15s, border-color 0.15s',
+                }}
+              >
+                {isChecked && !indeterminate && (
+                  <svg width={boxSize - 4} height={boxSize - 4} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <path d="M2 6l3 3 5-5" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+                {indeterminate && (
+                  <svg width={boxSize - 4} height={boxSize - 4} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <path d="M3 6h6" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                )}
+              </div>
+              <span style={{ fontSize: st.fontSize, color: labelColor }}>{label}</span>
+            </label>
+          );
+        })}
+      </div>
+
+      <TokenLegend
+        entries={[
+          { label: 'Checked BG', cssVar: '--color-primary-action-default', hex: checkedBgHex, palette },
+          { label: 'Unchecked border', cssVar: '--color-border-default', hex: borderHex, palette },
+          { label: 'Disabled', cssVar: '--color-primary-action-disabled', hex: disabledHex, palette },
+        ]}
+      />
+    </div>
+  );
+}
+
+// ─── Radio Buttons ────────────────────────────────────────────────────────────
+
+function MockRadioButtons({ palette, mode, size }: MockProps) {
+  const s = palette.semanticTokens;
+  const selectedBgHex = getSemanticHex(s.primaryAction.default, mode);
+  const borderHex = getSemanticHex(s.borders.default, mode);
+  const disabledHex = getSemanticHex(s.primaryAction.disabled, mode);
+  const textHex = mode === 'light' ? palette.neutral[900].hex : palette.neutral[100].hex;
+  const disabledTextHex = getSemanticHex(s.primaryAction.disabledText, mode);
+  const st = sizeStyles(size);
+  const outerSize = size === 'sm' ? 14 : size === 'lg' ? 20 : 16;
+  const innerSize = Math.round(outerSize * 0.45);
+
+  type RadioItemDef = { label: string; value: string; disabled?: boolean };
+  const itemDefs: RadioItemDef[] = [
+    { label: 'Option A', value: 'a' },
+    { label: 'Option B', value: 'b' },
+    { label: 'Option C', value: 'c' },
+    { label: 'Option D (disabled)', value: 'd', disabled: true },
+    { label: 'Option E (disabled, selected)', value: 'e', disabled: true },
+  ];
+
+  const [selectedValue, setSelectedValue] = useState('b');
+
+  return (
+    <div>
+      <h4
+        className="text-xs font-semibold uppercase tracking-wider mb-3"
+        style={{ color: 'var(--color-neutral-400, #9ca3af)' }}
+      >
+        Radio Buttons
+      </h4>
+      <div className="flex flex-col gap-2.5">
+        {itemDefs.map(({ label, value, disabled }) => {
+          const isSelected = selectedValue === value;
+          const ringColor = isSelected && !disabled ? selectedBgHex : (disabled ? disabledHex : borderHex);
+          const dotColor = isSelected ? (disabled ? disabledHex : selectedBgHex) : 'transparent';
+          const labelColor = disabled ? disabledTextHex : textHex;
+
+          return (
+            <label
+              key={value}
+              className="flex items-center gap-2.5 select-none"
+              style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+            >
+              {/* Real radio — visually hidden, drives the state */}
+              <input
+                type="radio"
+                name="mock-radio"
+                value={value}
+                checked={isSelected}
+                disabled={disabled}
+                className="sr-only"
+                onChange={() => setSelectedValue(value)}
+              />
+              {/* Token-styled visual ring + dot */}
+              <div
+                aria-hidden="true"
+                className="flex-shrink-0 flex items-center justify-center rounded-full"
+                style={{
+                  width: outerSize,
+                  height: outerSize,
+                  border: `2px solid ${ringColor}`,
+                  pointerEvents: 'none',
+                  transition: 'border-color 0.15s',
+                }}
+              >
+                <div
+                  style={{
+                    width: innerSize,
+                    height: innerSize,
+                    borderRadius: '50%',
+                    backgroundColor: dotColor,
+                    transition: 'background-color 0.15s',
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: st.fontSize, color: labelColor }}>{label}</span>
+            </label>
+          );
+        })}
+      </div>
+
+      <TokenLegend
+        entries={[
+          { label: 'Selected', cssVar: '--color-primary-action-default', hex: selectedBgHex, palette },
+          { label: 'Unselected border', cssVar: '--color-border-default', hex: borderHex, palette },
+          { label: 'Disabled', cssVar: '--color-primary-action-disabled', hex: disabledHex, palette },
         ]}
       />
     </div>
@@ -470,6 +725,27 @@ export function ComponentPreview({ palette }: ComponentPreviewProps) {
           onSelectVariant={() => void 0}
         />
         <MockAlerts
+          palette={palette}
+          mode={mode}
+          size={size}
+          selectedVariant={null}
+          onSelectVariant={() => void 0}
+        />
+        <MockSelect
+          palette={palette}
+          mode={mode}
+          size={size}
+          selectedVariant={null}
+          onSelectVariant={() => void 0}
+        />
+        <MockCheckboxes
+          palette={palette}
+          mode={mode}
+          size={size}
+          selectedVariant={null}
+          onSelectVariant={() => void 0}
+        />
+        <MockRadioButtons
           palette={palette}
           mode={mode}
           size={size}
