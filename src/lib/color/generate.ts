@@ -205,7 +205,7 @@ export function generateSemanticScale(
 export const SEMANTIC_HUES = {
   success: 145,
   info: 250,
-  warning: 85,
+  warning: 70,
   error: 25,
 } as const;
 
